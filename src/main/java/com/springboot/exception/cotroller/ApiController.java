@@ -3,11 +3,11 @@ package com.springboot.exception.cotroller;
 import com.springboot.exception.dto.User;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-
 import javax.validation.Valid;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
+
 
 @RestController
 @RequestMapping("/api/user")
@@ -30,7 +30,7 @@ public class ApiController { // 예외발생시키기
 
 
     @GetMapping("")
-    public User get(
+    public User get( // http://localhost:8080/api/user?name=&age=0
             @Size(min = 2)
             @RequestParam String name,
 
@@ -46,13 +46,11 @@ public class ApiController { // 예외발생시키기
     }
 
 
-
     @PostMapping("") // http://localhost:8080/api/user
     public User post(@Valid @RequestBody User user){
 
         System.out.println(user);
 
         return user;
-
     }
 }

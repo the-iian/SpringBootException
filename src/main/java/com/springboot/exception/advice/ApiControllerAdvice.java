@@ -9,7 +9,17 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.ConstraintViolationException;
+import javax.validation.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
+import com.springboot.exception.dto.Error;
+import com.springboot.exception.dto.ErrorResponse;
 
 @RestControllerAdvice(basePackageClasses = ApiController.class) // ApiController에서만 동작하는 Advice
 // @RestControllerAdvice(basePackages = "com.springboot.exception.controller")
@@ -33,7 +43,6 @@ public class ApiControllerAdvice {
 
 
     // 클라이언트가 잘못한 예외상황 처리
-
     // 전체 예외 모두 잡기
     @ExceptionHandler(value = Exception.class)
     public ResponseEntity exception(Exception e){
@@ -42,44 +51,38 @@ public class ApiControllerAdvice {
     }
 
 
-    // 제약조건과 맞지않는 데이터 길이가 입력됐을 때 예외처리
-    // 어떤 필드가 잘못됐는지 정보를 담고있다
-    @ExceptionHandler(value = ConstraintViolationException.class)
-    public ResponseEntity constraintViolationException(ConstraintViolationException e){
-
-        e.getConstraintViolations().forEach(error ->{
-
-            System.out.println(error);
-        });
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-    }
-
-
     // value가 null일 때
     @ExceptionHandler(value = MissingServletRequestParameterException.class)
-    public ResponseEntity missingServletRequestParameterException(MissingServletRequestParameterException e){
+    public ResponseEntity missingServletRequestParameterException(MissingServletRequestParameterException e, HttpServletRequest httpServletRequest){
+
+        List<Error> errorList = new ArrayList<>();
 
         String fieldName = e.getParameterName();
-        String fieldType = e.getParameterType();
         String invalidValue = e.getMessage();
 
-        System.out.println(fieldName);
-        System.out.println(fieldType);
-        System.out.println(invalidValue);
+        Error errorMessage = new Error();
+        errorMessage.setField(fieldName);
+        errorMessage.setMessage(e.getMessage());
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        ErrorResponse errorResponse = new ErrorResponse();
+        errorResponse.setErrorList(errorList);
+        errorResponse.setMessage("");
+        errorResponse.setRequestUrl(httpServletRequest.getRequestURI()); // 요청한 url에서 에러발생함을 넣기
+        errorResponse.setStatusCode(HttpStatus.BAD_REQUEST.toString());
+        errorResponse.setResultCode("FAIL");
 
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
 
     }
 
 
     // 특정 메소드 예외처리
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
-    public ResponseEntity methodArgumentNotValidException(MethodArgumentNotValidException e){
+    public ResponseEntity methodArgumentNotValidException(MethodArgumentNotValidException e, HttpServletRequest httpServletRequest){
+
+        List<Error> errorList = new ArrayList<>();
 
         BindingResult bindingResult = e.getBindingResult();
-
         bindingResult.getAllErrors().forEach(error -> {
             FieldError field = (FieldError) error;
 
@@ -87,14 +90,57 @@ public class ApiControllerAdvice {
             String message = field.getDefaultMessage();
             String value = field.getRejectedValue().toString(); // 어떤값이 잘못 들어갔는지 출력
 
-            System.out.println("---------------------");
-            System.out.println(fieldName);
-            System.out.println(message);
-            System.out.println(value);
+            Error errorMessage = new Error();
+            errorMessage.setField(fieldName);
+            errorMessage.setMessage(message);
+            errorMessage.setInvalidValue(value);
 
+            errorList.add(errorMessage);
         });
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage()); // 메시지 바로 담기
+        ErrorResponse errorResponse = new ErrorResponse();
+        errorResponse.setErrorList(errorList);
+        errorResponse.setMessage("");
+        errorResponse.setRequestUrl(httpServletRequest.getRequestURI()); // 요청한 url에서 에러발생함을 넣기
+        errorResponse.setStatusCode(HttpStatus.BAD_REQUEST.toString());
+        errorResponse.setResultCode("FAIL");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse); // 메시지 바로 담기
+    }
+
+
+    // 제약조건과 맞지않는 데이터 길이가 입력됐을 때 예외처리
+    // 어떤 필드가 잘못됐는지 정보를 담고있다
+    @ExceptionHandler(value = ConstraintViolationException.class)
+    public ResponseEntity constraintViolationException(ConstraintViolationException e, HttpServletRequest httpServletRequest){
+
+        List<Error> errorList = new ArrayList<>();
+
+        e.getConstraintViolations().forEach(error ->{
+
+            Stream<Path.Node> stream = StreamSupport.stream(error.getPropertyPath().spliterator(), false);
+            List<Path.Node> list = stream.collect(Collectors.toList());
+
+            String field = list.get(list.size() -1).getName();
+            String message = error.getMessage();
+            String invalidValue = error.getInvalidValue().toString();
+
+            Error errorMessage = new Error();
+            errorMessage.setField(field);
+            errorMessage.setMessage(message);
+            errorMessage.setInvalidValue(invalidValue);
+
+            errorList.add(errorMessage);
+        });
+
+        ErrorResponse errorResponse = new ErrorResponse();
+        errorResponse.setErrorList(errorList);
+        errorResponse.setMessage("");
+        errorResponse.setRequestUrl(httpServletRequest.getRequestURI()); // 요청한 url에서 에러발생함을 넣기
+        errorResponse.setStatusCode(HttpStatus.BAD_REQUEST.toString());
+        errorResponse.setResultCode("FAIL");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
 }
